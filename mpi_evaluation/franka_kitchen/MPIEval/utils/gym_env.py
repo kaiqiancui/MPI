@@ -8,7 +8,7 @@ Wrapper around a gym env that provides convenience functions
 
 import gym
 import numpy as np
-
+from gym.spaces import Dict
 
 class EnvSpec(object):
     def __init__(self, obs_dim, act_dim, horizon):
@@ -50,11 +50,19 @@ class GymEnv(object):
         except AttributeError:
             self._action_dim = self.env.unwrapped.action_dim
 
-        try:
-            self._observation_dim = self.env.observation_space.shape[0]
-        except AttributeError:
-            self._observation_dim = self.env.unwrapped.obs_dim
 
+        if isinstance(self.env.observation_space, Dict):
+            # 如果观测空间是字典类型，则遍历所有子空间，将它们的维度相加
+            total_dim = 0
+            for space in self.env.observation_space.spaces.values():
+                # 假设所有子空间都是一维的Box
+                total_dim += space.shape[0]
+            self._observation_dim = total_dim
+            print(f"Detected Dict observation space. Calculated total dim: {total_dim}")
+        else:
+            # 如果不是字典类型（比如传统的Box），则使用旧的逻辑
+            self._observation_dim = self.env.observation_space.shape[0]
+            
         # Specs
         self.spec = EnvSpec(self._observation_dim, self._action_dim, self._horizon)
 
@@ -80,16 +88,24 @@ class GymEnv(object):
     @property
     def horizon(self):
         return self._horizon
-
     def reset(self, seed=None):
-        try:
-            self.env._elapsed_steps = 0
-            return self.env.unwrapped.reset_model(seed=seed)
-        except:
+            # 兼容新版 gym 的 seed 设置方式
             if seed is not None:
-                self.set_seed(seed)
-            return self.env.reset()
+                try:
+                    self.env.seed(seed)
+                except AttributeError:
+                    pass # 忽略旧版环境没有 seed 的情况
 
+            # 直接调用下一层环境的 reset 方法
+            result = self.env.reset()
+
+            # 关键适配：确保无论如何都返回 (obs, info) 格式
+            if isinstance(result, tuple):
+                # 如果下一层返回的已经是 (obs, info)，直接透传
+                return result
+            else:
+                # 如果下一层只返回了 obs，手动包装成元组再返回
+                return result, {}
     def reset_model(self, seed=None):
         # overloading for legacy code
         return self.reset(seed)

@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 from mpi.models.util.extraction import MAPBlock
-
+from MPIEval.utils.transformer_network import AttentionHead
 
 import torch.nn.functional as F
 
@@ -39,6 +39,8 @@ class PCAdaPolicy:
                  proprio = 0,
                  init_log_std=0,
                  min_log_std=-3,
+                 #!修改
+                 policy_head_type = 'mlp',
                  seed=None):
         """
         :param env_spec: specifications of the env (see utils/gym_env.py)
@@ -61,10 +63,21 @@ class PCAdaPolicy:
         
         # Policy head
         # ------------------------
-        self.model = FCNetwork(self.n, self.m, hidden_sizes)
-        # # make weights small
-        # for param in list(self.model.parameters())[-2:]:  # only last layer
-        #    param.data = 1e-2 * param.data
+        # self.model = FCNetwork(self.n, self.m, hidden_sizes)
+        # # # make weights small
+        # # for param in list(self.model.parameters())[-2:]:  # only last layer
+        # #    param.data = 1e-2 * param.data
+
+        # =====> 策略头 (Policy head) - 动态创建 <=====
+        if policy_head_type == 'mlp':
+            print("INFO: Using MLP policy head.")
+            self.model = FCNetwork(self.n, self.m, hidden_sizes)
+        elif policy_head_type == 'attention':
+            print("INFO: Using Attention policy head.")
+            
+            self.model = AttentionHead(input_dim=self.n, output_dim=self.m, nhead=4) 
+        else:
+            raise ValueError(f"Unknown policy_head_type: {policy_head_type}")
 
         # noise variable
         self.log_std = Variable(torch.ones(self.m) * init_log_std, requires_grad=True)
@@ -115,8 +128,10 @@ class PCAdaPolicy:
     # Main functions
     # ============================================
     def get_action(self, observation):
-        img = observation['obs']
-        proprio = observation['proprio']
+        proprio = observation[-9:]
+        img = observation[:-9]
+        # img = observation['obs']
+        # proprio = observation['proprio']
         img = np.float32(np.expand_dims(img, 0))
         img = torch.from_numpy(img) 
         proprio = np.float32(np.expand_dims(proprio, 0))
@@ -134,6 +149,8 @@ class PCAdaPolicy:
     def get_action_train(self, observation):
         img = observation['obs']
         proprio = observation['proprio']
+        # img = observation['obs']
+        # proprio = observation['proprio']
         img = img.to('cpu')
         proprio = proprio.to('cpu')
         feat = self.adapter(img, self.proprio_projector(proprio))
@@ -222,25 +239,22 @@ class OriginalMLP:
     # Main functions
     # ============================================
     def get_action(self, observation):
-        # o = np.float32(observation.reshape(1, -1))
-        # observation = {'img': obs, 'proprio': proprio}
-        emb = observation['obs']
-        proprio = observation['proprio']
-        emb = np.float32(np.expand_dims(emb, 0))
-        emb = torch.from_numpy(emb) 
-        emb = emb.to('cpu')
-        if proprio is not None:
-            proprio = np.float32(np.expand_dims(proprio, 0))
-            proprio = torch.from_numpy(proprio) 
-            proprio = proprio.to('cpu')
-            self.obs_var.data = torch.cat([emb, proprio], dim=-1) #o
-        else:
-            self.obs_var.data = emb
+        proprio = observation[-9:]
+        img = observation[:-9]
+        # img = observation['obs']
+        # proprio = observation['proprio']
+        img = np.float32(np.expand_dims(img, 0))
+        img = torch.from_numpy(img) 
+        proprio = np.float32(np.expand_dims(proprio, 0))
+        proprio = torch.from_numpy(proprio) 
+        img = img.to('cpu')
+        proprio = proprio.to('cpu')
+        feat = self.adapter(img, self.proprio_projector(proprio))
+        self.obs_var.data = feat
         mean = self.model(self.obs_var).data.numpy()
         mean = mean.ravel()
         noise = np.exp(self.log_std_val) * np.random.randn(self.m)
         action = mean + noise
-        #action = mean
         return [action, {'mean': mean, 'log_std': self.log_std_val, 'evaluation': mean}]
     
     def get_action_train(self, observation):

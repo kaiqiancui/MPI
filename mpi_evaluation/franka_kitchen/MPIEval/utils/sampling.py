@@ -13,8 +13,8 @@ logging.disable(logging.CRITICAL)
 import gc
 from collections import namedtuple
 
-from metaworld.envs import (ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
-                            ALL_V2_ENVIRONMENTS_GOAL_HIDDEN)
+# from metaworld.envs import (ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE,
+#                             ALL_V2_ENVIRONMENTS_GOAL_HIDDEN)
 
 
 # Single core rollout to sample trajectories
@@ -81,7 +81,7 @@ def do_rollout(
         rewards=[]
         agent_infos = []
         env_infos = []
-        o = env.reset()    
+        o, _= env.reset()    
         done = False
         t = 0
         ims = []

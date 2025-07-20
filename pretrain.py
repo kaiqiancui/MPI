@@ -79,7 +79,7 @@ class PretrainConfig:
     data_ratio : float = 1.0
     
     # Root path for pre-processed dataset
-    pretraining_data_path: str = '/cpfs01/shared/opendrivelab/opendrivelab_hdd/ego4d/hand_object_interactions/v2/clips_jpgs/rawRes_3Frames'
+    pretraining_data_path: str = os.path.join(os.path.expanduser("~"), ".cache", "huggingface", "hub")
 
     hydra: Dict[str, Any] = field(default_factory=lambda: {
         "run": {"dir": "runs/train/${model.identifier}-${data_format}"}

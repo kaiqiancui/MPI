@@ -18,7 +18,8 @@ class DataLog:
         print(cfg.keys())
         wandb.init(
             project='franka-kitchen',
-            name=cfg.job_name
+            name=cfg.job_name,
+            mode="offline"
         )
         fullcfg = {**cfg, **cfg.env_kwargs, **cfg.bc_kwargs}
         wandb.config.update(fullcfg)
